@@ -1,51 +1,91 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { setUnauthenticatedHandler, tokenStore } from "@/lib/apollo-client";
 
-// Mock "login" — no real auth, just remembers which seeded user you're
-// acting as. Persisted to localStorage purely for dev convenience across
-// reloads.
-const STORAGE_KEY = "poc-current-user-id";
+// Mock login against the public endpoint's createToken mutation. Token is
+// persisted to localStorage purely for dev convenience across reloads.
+const STORAGE_KEY = "poc-restaurant-token";
+
+interface LoginResult {
+  ok: boolean;
+  message?: string;
+}
 
 interface AuthContextValue {
-  userId: string | null;
-  login: (userId: string) => void;
+  token: string | null;
+  login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const CREATE_TOKEN_MUTATION = /* GraphQL */ `
+  mutation CreateToken($email: String!, $password: String!) {
+    createToken(email: $email, password: $password) {
+      valid
+      token
+      message
+    }
+  }
+`;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [userId, setUserId] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
+    // One-time bootstrap from localStorage — deliberately not a subscription,
+    // just an initial read of external state that can't happen during SSR.
     try {
-      setUserId(window.localStorage.getItem(STORAGE_KEY));
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setToken(stored);
+        tokenStore.current = stored;
+      }
     } catch {
       // localStorage unavailable (e.g. private browsing) — stay logged out
     }
   }, []);
 
-  const login = (id: string) => {
-    setUserId(id);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, id);
-    } catch {
-      // ignore
-    }
-  };
+  useEffect(() => {
+    setUnauthenticatedHandler(logout);
+    return () => setUnauthenticatedHandler(() => {});
+  }, []);
 
-  const logout = () => {
-    setUserId(null);
+  function logout() {
+    setToken(null);
+    tokenStore.current = null;
     try {
       window.localStorage.removeItem(STORAGE_KEY);
     } catch {
       // ignore
     }
-  };
+  }
+
+  async function login(email: string, password: string): Promise<LoginResult> {
+    const res = await fetch("/api/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: CREATE_TOKEN_MUTATION, variables: { email, password } }),
+    });
+    const json = await res.json();
+    const result = json.data?.createToken;
+    if (!result?.valid || !result.token) {
+      return { ok: false, message: result?.message ?? "Login failed." };
+    }
+    setToken(result.token);
+    tokenStore.current = result.token;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, result.token);
+    } catch {
+      // ignore
+    }
+    return { ok: true };
+  }
 
   return (
-    <AuthContext.Provider value={{ userId, login, logout }}>
+    <AuthContext.Provider value={{ token, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

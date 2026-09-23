@@ -1,9 +1,10 @@
 import { createYoga } from "graphql-yoga";
 import type { NextRequest } from "next/server";
-import { schema } from "@/graphql/schema";
+import { publicSchema } from "@/graphql/public-schema";
 
+// Mock of the existing public endpoint — login only (createToken).
 const yoga = createYoga({
-  schema,
+  schema: publicSchema,
   graphqlEndpoint: "/api/graphql",
   fetchAPI: { Response },
 });
