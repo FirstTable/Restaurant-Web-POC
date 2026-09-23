@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { gql } from "@apollo/client";
 import { useMutation, useQuery } from "@apollo/client/react";
 import {
@@ -14,15 +15,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-
-// Demo restaurant — a real build would derive this from the signed-in
-// user's authorized restaurant(s) instead of hardcoding it.
-const RESTAURANT_ID = "r1";
+import { useCurrentUser } from "@/lib/use-current-user";
 
 const DASHBOARD_QUERY = gql`
   query Dashboard($restaurantId: ID!) {
@@ -141,17 +146,53 @@ function formatDays(days: Weekday[]) {
 }
 
 export default function DashboardPage() {
+  const { user, loading: userLoading } = useCurrentUser();
+  const [restaurantId, setRestaurantId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRestaurantId(user?.restaurants[0]?.id ?? null);
+  }, [user]);
+
   const { data, loading, error } = useQuery<DashboardData>(DASHBOARD_QUERY, {
-    variables: { restaurantId: RESTAURANT_ID },
+    variables: { restaurantId },
+    skip: !restaurantId,
   });
   const [checkIn] = useMutation(CHECK_IN_MUTATION, { refetchQueries: [DASHBOARD_QUERY] });
   const [markNotAppeared] = useMutation(NOT_APPEARED_MUTATION, { refetchQueries: [DASHBOARD_QUERY] });
 
+  if (!userLoading && !user) {
+    return (
+      <main className="mx-auto max-w-4xl w-full p-8">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground text-sm">
+              Log in from the top right to view the dashboard.
+            </p>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto max-w-4xl w-full p-8">
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Restaurant Dashboard</CardTitle>
+          {user && user.restaurants.length > 1 && (
+            <Select value={restaurantId ?? undefined} onValueChange={setRestaurantId}>
+              <SelectTrigger className="w-56">
+                <SelectValue placeholder="Choose restaurant" />
+              </SelectTrigger>
+              <SelectContent>
+                {user.restaurants.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </CardHeader>
         <CardContent>
           {loading && <p className="text-muted-foreground text-sm">Loading…</p>}

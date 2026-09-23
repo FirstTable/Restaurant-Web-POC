@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ApolloWrapper } from "@/lib/apollo-provider";
+import { AuthProvider } from "@/lib/auth-context";
+import { Nav } from "@/components/nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,7 +27,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ApolloWrapper>{children}</ApolloWrapper>
+        <ApolloWrapper>
+          <AuthProvider>
+            <Nav />
+            {children}
+          </AuthProvider>
+        </ApolloWrapper>
       </body>
     </html>
   );
