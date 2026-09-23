@@ -58,6 +58,9 @@ const reservations: Reservation[] = [
   { id: "9004", restaurantId: "101", reference: "FT6Q3WKE", guestName: "Daniel Osei", phone: "+64 21 555 0466", date: "2026-10-05", time: "12:00:00", dateTimeUTC: "2026-10-04T23:00:00Z", session: "LUNCH", partySize: 3, state: "BOOKED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: "Nut allergy", comments: null, firstVisit: false },
   { id: "9005", restaurantId: "101", reference: "FT2H8VCT", guestName: "Ellie Barnes", phone: null, date: "2026-10-05", time: "18:00:00", dateTimeUTC: "2026-10-05T05:00:00Z", session: "DINNER", partySize: 6, state: "CANCELLED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: null, comments: null, firstVisit: false },
   { id: "9101", restaurantId: "103", reference: "FT5R1NDQ", guestName: "Jonah Patel", phone: "+64 21 555 0788", date: "2026-10-04", time: "19:00:00", dateTimeUTC: "2026-10-04T06:00:00Z", session: "DINNER", partySize: 2, state: "BOOKED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: null, comments: null, firstVisit: true },
+  { id: "9201", restaurantId: "102", reference: "FT9L4XKM", guestName: "Harriet Cole", phone: "+64 21 555 0512", date: "2026-10-04", time: "19:00:00", dateTimeUTC: "2026-10-04T06:00:00Z", session: "DINNER", partySize: 2, state: "BOOKED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: null, comments: null, firstVisit: false },
+  { id: "9202", restaurantId: "102", reference: "FT3P7HDW", guestName: "Marcus Webb", phone: "+64 27 555 0364", date: "2026-10-04", time: "19:30:00", dateTimeUTC: "2026-10-04T06:30:00Z", session: "DINNER", partySize: 5, state: "BOOKED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: "Vegetarian x2", comments: "Birthday", firstVisit: true },
+  { id: "9203", restaurantId: "102", reference: "FT6V2QRS", guestName: "Nina Patel", phone: null, date: "2026-10-05", time: "19:00:00", dateTimeUTC: "2026-10-05T06:00:00Z", session: "DINNER", partySize: 3, state: "CHECKED_IN", checkedInAt: "2026-10-05T06:04:22Z", notAppearedAt: null, dietaryRequirements: null, comments: null, firstVisit: false },
 ];
 
 let availabilitySlots: AvailabilitySlot[] = [
@@ -65,6 +68,8 @@ let availabilitySlots: AvailabilitySlot[] = [
   { id: "5002", restaurantId: "101", date: "2026-10-04", time: "18:15:00", session: "DINNER", limitBy: "TABLES", tablesAvailable: 0, tablesSold: 1, paxAvailable: 0, paxSold: 4, partySizes: "2,3,4", price: "25.00", discount: 0.5, locked: false },
   { id: "5003", restaurantId: "101", date: "2026-10-04", time: "18:30:00", session: "DINNER", limitBy: "TABLES", tablesAvailable: 2, tablesSold: 1, paxAvailable: 0, paxSold: 2, partySizes: "2,3,4", price: "25.00", discount: 0.5, locked: true },
   { id: "5004", restaurantId: "101", date: "2026-10-05", time: "12:00:00", session: "LUNCH", limitBy: "TABLES", tablesAvailable: 4, tablesSold: 1, paxAvailable: 0, paxSold: 3, partySizes: "2,3,4", price: "20.00", discount: 0.5, locked: false },
+  { id: "5005", restaurantId: "102", date: "2026-10-04", time: "19:00:00", session: "DINNER", limitBy: "TABLES", tablesAvailable: 2, tablesSold: 2, paxAvailable: 0, paxSold: 7, partySizes: "2,3,4,5", price: "22.00", discount: 0.5, locked: false },
+  { id: "5006", restaurantId: "102", date: "2026-10-05", time: "19:00:00", session: "DINNER", limitBy: "TABLES", tablesAvailable: 3, tablesSold: 1, paxAvailable: 0, paxSold: 3, partySizes: "2,3,4,5", price: "22.00", discount: 0.5, locked: false },
 ];
 
 let nextSlotSeq = 5100;
