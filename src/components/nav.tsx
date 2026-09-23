@@ -13,8 +13,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/lib/auth-context";
-import { useCurrentUser } from "@/lib/use-current-user";
+import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 
 function LoginDialog() {
   const { login } = useAuth();
@@ -70,7 +77,7 @@ function LoginDialog() {
 
 export function Nav() {
   const { logout } = useAuth();
-  const { user } = useCurrentUser();
+  const { user, restaurantId, access, setRestaurantId } = useSelectedRestaurant();
 
   return (
     <header className="border-b">
@@ -82,13 +89,25 @@ export function Nav() {
         {user ? (
           <div className="flex items-center gap-3">
             <span className="text-sm">{user.firstName} {user.surname}</span>
-            <div className="flex gap-1">
-              {user.access.map((a) => (
-                <Badge key={a.restaurant.id} variant={a.role === "MANAGER" ? "default" : "secondary"}>
-                  {a.restaurant.title}: {a.role}
-                </Badge>
-              ))}
-            </div>
+            {user.access.length > 1 && (
+              <Select value={restaurantId ?? undefined} onValueChange={setRestaurantId}>
+                <SelectTrigger className="w-40" size="sm">
+                  <SelectValue placeholder="Restaurant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {user.access.map((a) => (
+                    <SelectItem key={a.restaurant.id} value={a.restaurant.id}>
+                      {a.restaurant.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {access && (
+              <Badge variant={access.role === "MANAGER" ? "default" : "secondary"}>
+                {access.role}
+              </Badge>
+            )}
             <Button size="sm" variant="outline" onClick={logout}>
               Log out
             </Button>

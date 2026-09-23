@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ApolloWrapper } from "@/lib/apollo-provider";
 import { AuthProvider } from "@/lib/auth-context";
+import { RestaurantProvider } from "@/lib/restaurant-context";
 import { Nav } from "@/components/nav";
 import "./globals.css";
 
@@ -29,8 +30,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <ApolloWrapper>
           <AuthProvider>
-            <Nav />
-            {children}
+            <RestaurantProvider>
+              <Nav />
+              {children}
+            </RestaurantProvider>
           </AuthProvider>
         </ApolloWrapper>
       </body>

@@ -36,7 +36,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { useCurrentUser } from "@/lib/use-current-user";
+import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 
 // Demo window — matches the fixture data (2026-10-04 to 2026-10-05), extended
 // a couple of days so the schedule tab shows the backend filling in closed days.
@@ -235,11 +235,8 @@ function AddAvailabilityDialog({ restaurantId, onDone }: { restaurantId: string;
 }
 
 export default function DashboardPage() {
-  const { user, loading: userLoading } = useCurrentUser();
-  const [manualRestaurantId, setManualRestaurantId] = useState<string | null>(null);
-  const restaurantId = manualRestaurantId ?? user?.access[0]?.restaurant.id ?? null;
-
-  const role = user?.access.find((a) => a.restaurant.id === restaurantId)?.role;
+  const { user, loading: userLoading, restaurantId, access } = useSelectedRestaurant();
+  const role = access?.role;
 
   const reservationsQuery = useQuery<{ reservations: Reservation[] }>(RESERVATIONS_QUERY, {
     variables: { restaurantId, from: FROM, to: TO },
@@ -290,22 +287,8 @@ export default function DashboardPage() {
   return (
     <main className="mx-auto max-w-4xl w-full p-8">
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Restaurant Dashboard</CardTitle>
-          {user && user.access.length > 1 && (
-            <Select value={restaurantId ?? undefined} onValueChange={setManualRestaurantId}>
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="Choose restaurant" />
-              </SelectTrigger>
-              <SelectContent>
-                {user.access.map((a) => (
-                  <SelectItem key={a.restaurant.id} value={a.restaurant.id}>
-                    {a.restaurant.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+        <CardHeader>
+          <CardTitle>{access?.restaurant.title ?? "Restaurant Dashboard"}</CardTitle>
         </CardHeader>
         <CardContent>
           {actionError && <p className="text-destructive text-sm mb-3">{actionError}</p>}
