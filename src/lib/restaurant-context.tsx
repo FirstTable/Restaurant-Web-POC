@@ -6,14 +6,14 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 // manual override — combined with the user's access list (first entry as
 // the default) by useSelectedRestaurant.
 interface RestaurantContextValue {
-  manualRestaurantId: string | null;
-  setManualRestaurantId: (id: string) => void;
+  manualRestaurantId: number | null;
+  setManualRestaurantId: (id: number) => void;
 }
 
 const RestaurantContext = createContext<RestaurantContextValue | null>(null);
 
 export function RestaurantProvider({ children }: { children: ReactNode }) {
-  const [manualRestaurantId, setManualRestaurantId] = useState<string | null>(null);
+  const [manualRestaurantId, setManualRestaurantId] = useState<number | null>(null);
   return (
     <RestaurantContext.Provider value={{ manualRestaurantId, setManualRestaurantId }}>
       {children}

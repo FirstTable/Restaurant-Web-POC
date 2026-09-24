@@ -11,15 +11,13 @@ export const ME_QUERY = gql`
       firstName
       surname
       email
+      isInternalAdmin
       access {
         role
         restaurant {
           id
           title
           city
-          timezone
-          currency
-          sessions
         }
       }
     }
@@ -29,12 +27,9 @@ export const ME_QUERY = gql`
 export type RestaurantRole = "STAFF" | "MANAGER";
 
 export interface RestaurantSummary {
-  id: string;
+  id: number;
   title: string;
   city: string | null;
-  timezone: string;
-  currency: string | null;
-  sessions: string[];
 }
 
 export interface RestaurantAccess {
@@ -43,10 +38,11 @@ export interface RestaurantAccess {
 }
 
 export interface CurrentUser {
-  id: string;
+  id: number;
   firstName: string | null;
   surname: string | null;
   email: string;
+  isInternalAdmin: boolean;
   access: RestaurantAccess[];
 }
 

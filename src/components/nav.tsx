@@ -26,8 +26,8 @@ import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 function LoginDialog() {
   const { login } = useAuth();
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("manager@example.com");
-  const [password, setPassword] = useState("password");
+  const [email, setEmail] = useState("restaurant-manager@firsttable.test");
+  const [password, setPassword] = useState("RestaurantApp2026!");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -64,7 +64,8 @@ function LoginDialog() {
           </div>
           {error && <p className="text-destructive text-sm">{error}</p>}
           <p className="text-muted-foreground text-xs">
-            Try manager@example.com or staff@example.com — password is &quot;password&quot;.
+            Try restaurant-manager@firsttable.test or restaurant-staff@firsttable.test —
+            password is &quot;RestaurantApp2026!&quot;.
           </p>
           <Button type="submit" disabled={submitting}>
             {submitting ? "Logging in…" : "Log in"}
@@ -90,13 +91,16 @@ export function Nav() {
           <div className="flex items-center gap-3">
             <span className="text-sm">{user.firstName} {user.surname}</span>
             {user.access.length > 1 && (
-              <Select value={restaurantId ?? undefined} onValueChange={setRestaurantId}>
+              <Select
+                value={restaurantId != null ? String(restaurantId) : undefined}
+                onValueChange={(v) => setRestaurantId(Number(v))}
+              >
                 <SelectTrigger className="w-40" size="sm">
                   <SelectValue placeholder="Restaurant" />
                 </SelectTrigger>
                 <SelectContent>
                   {user.access.map((a) => (
-                    <SelectItem key={a.restaurant.id} value={a.restaurant.id}>
+                    <SelectItem key={a.restaurant.id} value={String(a.restaurant.id)}>
                       {a.restaurant.title}
                     </SelectItem>
                   ))}

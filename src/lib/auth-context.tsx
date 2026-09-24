@@ -1,10 +1,11 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { setUnauthenticatedHandler, tokenStore } from "@/lib/apollo-client";
+import { PUBLIC_GRAPHQL_URL, setUnauthenticatedHandler, tokenStore } from "@/lib/apollo-client";
 
-// Mock login against the public endpoint's createToken mutation. Token is
-// persisted to localStorage purely for dev convenience across reloads.
+// Login against the real local backend's public /graphql createToken
+// mutation. Token is persisted to localStorage purely for dev convenience
+// across reloads.
 const STORAGE_KEY = "poc-restaurant-token";
 
 interface LoginResult {
@@ -22,7 +23,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const CREATE_TOKEN_MUTATION = /* GraphQL */ `
   mutation CreateToken($email: String!, $password: String!) {
-    createToken(email: $email, password: $password) {
+    createToken(Email: $email, Password: $password) {
       valid
       token
       message
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(email: string, password: string): Promise<LoginResult> {
-    const res = await fetch("/api/graphql", {
+    const res = await fetch(PUBLIC_GRAPHQL_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: CREATE_TOKEN_MUTATION, variables: { email, password } }),

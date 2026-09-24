@@ -36,15 +36,20 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { getErrorMessage } from "@/lib/apollo-client";
 import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 
-// Demo window — matches the fixture data (2026-10-04 to 2026-10-05), extended
-// a couple of days so the schedule tab shows the backend filling in closed days.
-const FROM = "2026-10-04";
-const TO = "2026-10-08";
+// A week starting today, in the restaurant's local date terms (plain
+// "YYYY-MM-DD" strings — the real API takes String, not a Date scalar).
+function toDateString(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+const TODAY = new Date();
+const FROM = toDateString(TODAY);
+const TO = toDateString(new Date(TODAY.getTime() + 6 * 24 * 60 * 60 * 1000));
 
 const RESERVATIONS_QUERY = gql`
-  query Reservations($restaurantId: ID!, $from: Date!, $to: Date) {
+  query Reservations($restaurantId: Int!, $from: String!, $to: String) {
     reservations(restaurantId: $restaurantId, from: $from, to: $to) {
       id
       guestName
@@ -59,7 +64,7 @@ const RESERVATIONS_QUERY = gql`
 `;
 
 const SCHEDULE_QUERY = gql`
-  query Schedule($restaurantId: ID!, $from: Date!, $to: Date!) {
+  query Schedule($restaurantId: Int!, $from: String!, $to: String!) {
     schedule(restaurantId: $restaurantId, from: $from, to: $to) {
       date
       isClosed
@@ -82,7 +87,7 @@ const SCHEDULE_QUERY = gql`
 `;
 
 const CHANGE_STATE_MUTATION = gql`
-  mutation ChangeReservationState($restaurantId: ID!, $reservationId: ID!, $state: ReservationStateChange!) {
+  mutation ChangeReservationState($restaurantId: Int!, $reservationId: Int!, $state: ReservationStateChange!) {
     changeReservationState(restaurantId: $restaurantId, reservationId: $reservationId, state: $state) {
       id
       state
@@ -111,7 +116,7 @@ const ADD_TABLES_MUTATION = gql`
 type ReservationState = "BOOKED" | "CHECKED_IN" | "NOT_APPEARED" | "CANCELLED";
 
 interface Reservation {
-  id: string;
+  id: number;
   guestName: string;
   date: string;
   time: string;
@@ -124,7 +129,7 @@ interface Reservation {
 type CapacityLimit = "TABLES" | "PAX" | "BOTH";
 
 interface AvailabilitySlot {
-  id: string;
+  id: number;
   time: string;
   session: string;
   limitBy: CapacityLimit;
@@ -158,7 +163,20 @@ function formatTimeOfDay(time: string) {
   return `${hour12}:${minutes.toString().padStart(2, "0")}${period}`;
 }
 
-function AddAvailabilityDialog({ restaurantId, onDone }: { restaurantId: string; onDone: () => void }) {
+// limitBy says which pair of numbers actually constrains the slot — show
+// only what's relevant rather than always defaulting to the tables pair.
+function formatCapacity(slot: AvailabilitySlot) {
+  const parts: string[] = [];
+  if (slot.limitBy === "TABLES" || slot.limitBy === "BOTH") {
+    parts.push(`${slot.tablesAvailable} tables left / ${slot.tablesSold} sold`);
+  }
+  if (slot.limitBy === "PAX" || slot.limitBy === "BOTH") {
+    parts.push(`${slot.paxAvailable} pax left / ${slot.paxSold} sold`);
+  }
+  return parts.join(" · ");
+}
+
+function AddAvailabilityDialog({ restaurantId, onDone }: { restaurantId: number; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(FROM);
   const [session, setSession] = useState("DINNER");
@@ -186,7 +204,7 @@ function AddAvailabilityDialog({ restaurantId, onDone }: { restaurantId: string;
       setOpen(false);
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add availability.");
+      setError(getErrorMessage(err));
     }
   }
 
@@ -251,22 +269,22 @@ export default function DashboardPage() {
   const [addTables] = useMutation(ADD_TABLES_MUTATION);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  async function handleChangeState(reservationId: string, state: string) {
+  async function handleChangeState(reservationId: number, state: string) {
     setActionError(null);
     try {
       await changeState({ variables: { restaurantId, reservationId, state } });
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Action failed.");
+      setActionError(getErrorMessage(err));
     }
   }
 
-  async function handleAddTable(availabilityId: string) {
+  async function handleAddTable(availabilityId: number) {
     setActionError(null);
     try {
       await addTables({ variables: { input: { restaurantId, availabilityId, tables: 1 } } });
       scheduleQuery.refetch();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Action failed.");
+      setActionError(getErrorMessage(err));
     }
   }
 
@@ -302,7 +320,7 @@ export default function DashboardPage() {
             <TabsContent value="reservations">
               {reservationsQuery.loading && <p className="text-muted-foreground text-sm">Loading…</p>}
               {reservationsQuery.error && (
-                <p className="text-destructive text-sm">{reservationsQuery.error.message}</p>
+                <p className="text-destructive text-sm">{getErrorMessage(reservationsQuery.error)}</p>
               )}
               {reservationsQuery.data && (
                 <Table>
@@ -357,7 +375,7 @@ export default function DashboardPage() {
               )}
               {scheduleQuery.loading && <p className="text-muted-foreground text-sm">Loading…</p>}
               {scheduleQuery.error && (
-                <p className="text-destructive text-sm">{scheduleQuery.error.message}</p>
+                <p className="text-destructive text-sm">{getErrorMessage(scheduleQuery.error)}</p>
               )}
               {scheduleQuery.data && (
                 <div className="flex flex-col gap-4">
@@ -365,13 +383,7 @@ export default function DashboardPage() {
                     <div key={day.date}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium text-sm">{day.date}</span>
-                        {day.isClosed ? (
-                          <Badge variant="secondary">Closed</Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">
-                            {day.tablesSold}/{day.tablesAvailable + day.tablesSold} tables booked
-                          </span>
-                        )}
+                        {day.isClosed && <Badge variant="secondary">Closed</Badge>}
                       </div>
                       {!day.isClosed && (
                         <Table>
@@ -379,7 +391,7 @@ export default function DashboardPage() {
                             <TableRow>
                               <TableHead>Time</TableHead>
                               <TableHead>Session</TableHead>
-                              <TableHead>Tables</TableHead>
+                              <TableHead>Capacity</TableHead>
                               <TableHead>Party sizes</TableHead>
                               <TableHead />
                             </TableRow>
@@ -390,7 +402,7 @@ export default function DashboardPage() {
                                 <TableCell>{formatTimeOfDay(slot.time)}</TableCell>
                                 <TableCell>{slot.session}</TableCell>
                                 <TableCell>
-                                  {slot.tablesAvailable} left / {slot.tablesSold} sold
+                                  {formatCapacity(slot)}
                                   {slot.locked && <Badge variant="secondary" className="ml-2">Locked</Badge>}
                                 </TableCell>
                                 <TableCell>{slot.partySizes ?? "—"}</TableCell>
