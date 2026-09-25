@@ -263,28 +263,41 @@ export default function DashboardPage() {
   const scheduleQuery = useQuery<{ schedule: ScheduleDay[] }>(SCHEDULE_QUERY, {
     variables: { restaurantId, from: FROM, to: TO },
     skip: !restaurantId,
+    // Without this, .loading stays false during refetch() and the "Loading…"
+    // state never shows after adding tables/availability.
+    notifyOnNetworkStatusChange: true,
   });
 
-  const [changeState] = useMutation(CHANGE_STATE_MUTATION);
-  const [addTables] = useMutation(ADD_TABLES_MUTATION);
+  const [changeState, { loading: changeStateLoading }] = useMutation(CHANGE_STATE_MUTATION);
+  const [addTables, { loading: addTablesLoading }] = useMutation(ADD_TABLES_MUTATION);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [pendingReservation, setPendingReservation] = useState<{ id: number; state: string } | null>(null);
+  const [pendingSlotId, setPendingSlotId] = useState<number | null>(null);
 
   async function handleChangeState(reservationId: number, state: string) {
+    if (changeStateLoading) return; // already mid-flight — ignore a repeat click
     setActionError(null);
+    setPendingReservation({ id: reservationId, state });
     try {
       await changeState({ variables: { restaurantId, reservationId, state } });
     } catch (err) {
       setActionError(getErrorMessage(err));
+    } finally {
+      setPendingReservation(null);
     }
   }
 
   async function handleAddTable(availabilityId: number) {
+    if (addTablesLoading) return;
     setActionError(null);
+    setPendingSlotId(availabilityId);
     try {
       await addTables({ variables: { input: { restaurantId, availabilityId, tables: 1 } } });
       scheduleQuery.refetch();
     } catch (err) {
       setActionError(getErrorMessage(err));
+    } finally {
+      setPendingSlotId(null);
     }
   }
 
@@ -295,6 +308,21 @@ export default function DashboardPage() {
           <CardContent className="p-6">
             <p className="text-muted-foreground text-sm">
               Log in from the top right to view the dashboard.
+            </p>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  if (user && user.access.length === 0) {
+    return (
+      <main className="mx-auto max-w-4xl w-full p-8">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground text-sm">
+              {user.email} isn&apos;t mapped to any restaurant. Nothing to show here —
+              this is a backend-side access mapping, not something this app can fix.
             </p>
           </CardContent>
         </Card>
@@ -335,33 +363,36 @@ export default function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {reservationsQuery.data.reservations.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell>{r.guestName}{r.firstVisit && <span className="text-muted-foreground text-xs"> (first visit)</span>}</TableCell>
-                        <TableCell>{r.partySize}</TableCell>
-                        <TableCell>{r.date}</TableCell>
-                        <TableCell>{formatTimeOfDay(r.time)}</TableCell>
-                        <TableCell>
-                          <Badge variant={stateVariant[r.state]}>{r.state}</Badge>
-                        </TableCell>
-                        <TableCell className="flex gap-2 justify-end">
-                          {r.state === "CANCELLED" ? null : r.state === "BOOKED" ? (
-                            <>
-                              <Button size="sm" variant="outline" onClick={() => handleChangeState(r.id, "CHECKED_IN")}>
-                                Check in
+                    {reservationsQuery.data.reservations.map((r) => {
+                      const isPending = pendingReservation?.id === r.id;
+                      return (
+                        <TableRow key={r.id}>
+                          <TableCell>{r.guestName}{r.firstVisit && <span className="text-muted-foreground text-xs"> (first visit)</span>}</TableCell>
+                          <TableCell>{r.partySize}</TableCell>
+                          <TableCell>{r.date}</TableCell>
+                          <TableCell>{formatTimeOfDay(r.time)}</TableCell>
+                          <TableCell>
+                            <Badge variant={stateVariant[r.state]}>{r.state}</Badge>
+                          </TableCell>
+                          <TableCell className="flex gap-2 justify-end">
+                            {r.state === "CANCELLED" ? null : r.state === "BOOKED" ? (
+                              <>
+                                <Button size="sm" variant="outline" disabled={isPending} onClick={() => handleChangeState(r.id, "CHECKED_IN")}>
+                                  {isPending && pendingReservation?.state === "CHECKED_IN" ? "Checking in…" : "Check in"}
+                                </Button>
+                                <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChangeState(r.id, "NOT_APPEARED")}>
+                                  {isPending && pendingReservation?.state === "NOT_APPEARED" ? "Marking…" : "No-show"}
+                                </Button>
+                              </>
+                            ) : (
+                              <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChangeState(r.id, "BOOKED")}>
+                                {isPending ? "Undoing…" : "Undo"}
                               </Button>
-                              <Button size="sm" variant="ghost" onClick={() => handleChangeState(r.id, "NOT_APPEARED")}>
-                                No-show
-                              </Button>
-                            </>
-                          ) : (
-                            <Button size="sm" variant="ghost" onClick={() => handleChangeState(r.id, "BOOKED")}>
-                              Undo
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -411,11 +442,11 @@ export default function DashboardPage() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      disabled={slot.locked}
+                                      disabled={slot.locked || pendingSlotId === slot.id}
                                       title={slot.locked ? "Locked slots can't be changed from this app" : undefined}
                                       onClick={() => handleAddTable(slot.id)}
                                     >
-                                      +1 table
+                                      {pendingSlotId === slot.id ? "Adding…" : "+1 table"}
                                     </Button>
                                   )}
                                 </TableCell>
