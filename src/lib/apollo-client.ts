@@ -36,8 +36,13 @@ export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export const RESTAURANT_GRAPHQL_URL = "https://firsttable.local/restaurant-graphql";
-export const PUBLIC_GRAPHQL_URL = "https://firsttable.local/graphql";
+// API host varies per environment — firsttable.local only resolves on a
+// dev machine with the right /etc/hosts entry, staging/prod point at a real
+// cluster. Set NEXT_PUBLIC_API_HOST to override; both endpoints share the
+// same host, differing only by path.
+const API_HOST = process.env.NEXT_PUBLIC_API_HOST ?? "firsttable.local";
+export const RESTAURANT_GRAPHQL_URL = `https://${API_HOST}/restaurant-graphql`;
+export const PUBLIC_GRAPHQL_URL = `https://${API_HOST}/graphql`;
 
 // Mutable token holder read by the auth link on every request. Kept outside
 // React state so the Apollo Client instance (created once) doesn't need to
