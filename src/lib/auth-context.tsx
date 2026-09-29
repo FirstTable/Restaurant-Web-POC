@@ -65,13 +65,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(email: string, password: string): Promise<LoginResult> {
-    const res = await fetch(PUBLIC_GRAPHQL_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: CREATE_TOKEN_MUTATION, variables: { email, password } }),
-    });
-    const json = await res.json();
-    const result = json.data?.createToken;
+    let json: unknown;
+    try {
+      const res = await fetch(PUBLIC_GRAPHQL_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: CREATE_TOKEN_MUTATION, variables: { email, password } }),
+      });
+      json = await res.json();
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "network error";
+      return { ok: false, message: `Couldn't reach the login server (${reason}).` };
+    }
+    const result = (json as { data?: { createToken?: { valid: boolean; token: string | null; message: string | null } } }).data?.createToken;
     if (!result?.valid || !result.token) {
       return { ok: false, message: result?.message ?? "Login failed." };
     }

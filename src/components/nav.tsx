@@ -35,12 +35,17 @@ function LoginDialog() {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
-    const result = await login(email, password);
-    setSubmitting(false);
-    if (result.ok) {
-      setOpen(false);
-    } else {
-      setError(result.message ?? "Login failed.");
+    try {
+      const result = await login(email, password);
+      if (result.ok) {
+        setOpen(false);
+      } else {
+        setError(result.message ?? "Login failed.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
