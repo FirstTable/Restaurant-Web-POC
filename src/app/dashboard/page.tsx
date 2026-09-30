@@ -36,6 +36,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { RestaurantIdLookup } from "@/components/restaurant-id-lookup";
 import { getErrorMessage } from "@/lib/apollo-client";
 import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 
@@ -253,7 +254,8 @@ function AddAvailabilityDialog({ restaurantId, onDone }: { restaurantId: number;
 }
 
 export default function DashboardPage() {
-  const { user, loading: userLoading, restaurantId, access } = useSelectedRestaurant();
+  const { user, loading: userLoading, restaurantId, access, lookupLoading, lookupError } =
+    useSelectedRestaurant();
   const role = access?.role;
 
   const reservationsQuery = useQuery<{ reservations: Reservation[] }>(RESERVATIONS_QUERY, {
@@ -315,7 +317,29 @@ export default function DashboardPage() {
     );
   }
 
-  if (user && user.access.length === 0) {
+  if (user?.isInternalAdmin && (restaurantId == null || !access)) {
+    return (
+      <main className="mx-auto max-w-4xl w-full p-8">
+        <Card>
+          <CardContent className="p-6 flex flex-col gap-3">
+            <p className="text-muted-foreground text-sm">
+              {user.email} is a FirstTable admin, so it isn&apos;t mapped to restaurants — it
+              can open any one by ID.
+            </p>
+            <RestaurantIdLookup />
+            {lookupLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
+            {lookupError && (
+              <p className="text-destructive text-sm">
+                Restaurant {restaurantId}: {getErrorMessage(lookupError)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  if (user && !user.isInternalAdmin && user.access.length === 0) {
     return (
       <main className="mx-auto max-w-4xl w-full p-8">
         <Card>

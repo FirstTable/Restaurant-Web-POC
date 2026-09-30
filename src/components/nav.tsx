@@ -20,13 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RestaurantIdLookup } from "@/components/restaurant-id-lookup";
 import { useAuth } from "@/lib/auth-context";
 import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 
 function LoginDialog() {
   const { login } = useAuth();
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("restaurant-manager@firsttable.test");
+  const [email, setEmail] = useState("restaurant@firsttable.test");
   const [password, setPassword] = useState("RestaurantApp2026!");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -69,8 +70,8 @@ function LoginDialog() {
           </div>
           {error && <p className="text-destructive text-sm">{error}</p>}
           <p className="text-muted-foreground text-xs">
-            Try restaurant-manager@firsttable.test or restaurant-staff@firsttable.test —
-            password is &quot;RestaurantApp2026!&quot;.
+            Demo account restaurant@firsttable.test (STAFF at one restaurant, MANAGER at
+            another) — password is &quot;RestaurantApp2026!&quot;.
           </p>
           <Button type="submit" disabled={submitting}>
             {submitting ? "Logging in…" : "Log in"}
@@ -112,6 +113,7 @@ export function Nav() {
                 </SelectContent>
               </Select>
             )}
+            {user.isInternalAdmin && <RestaurantIdLookup compact />}
             {access && (
               <Badge variant={access.role === "MANAGER" ? "default" : "secondary"}>
                 {access.role}
