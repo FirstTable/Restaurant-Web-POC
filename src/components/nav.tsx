@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RestaurantIdLookup } from "@/components/restaurant-id-lookup";
+import { RestaurantSearch } from "@/components/restaurant-search";
 import { useAuth } from "@/lib/auth-context";
 import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 
@@ -113,7 +113,7 @@ export function Nav() {
                 </SelectContent>
               </Select>
             )}
-            {user.isInternalAdmin && <RestaurantIdLookup compact />}
+            {user.isInternalAdmin && <RestaurantSearch compact />}
             {access && (
               <Badge variant={access.role === "MANAGER" ? "default" : "secondary"}>
                 {access.role}

@@ -37,7 +37,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { RestaurantIdLookup } from "@/components/restaurant-id-lookup";
+import { RestaurantSearch } from "@/components/restaurant-search";
 import { getErrorMessage } from "@/lib/apollo-client";
 import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 
@@ -406,9 +406,9 @@ function DashboardContentInner() {
           <CardContent className="p-6 flex flex-col gap-3">
             <p className="text-muted-foreground text-sm">
               {user.email} is a FirstTable admin, so it isn&apos;t mapped to restaurants — it
-              can open any one by ID.
+              can open any one — search by name or ID.
             </p>
-            <RestaurantIdLookup />
+            <RestaurantSearch />
             {lookupLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
             {lookupError && (
               <p className="text-destructive text-sm">
