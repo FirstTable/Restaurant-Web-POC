@@ -402,7 +402,7 @@ function DashboardContentInner() {
   if (user?.isInternalAdmin && (restaurantId == null || !access)) {
     return (
       <main className="mx-auto max-w-4xl w-full p-8">
-        <Card>
+        <Card className="overflow-visible">
           <CardContent className="p-6 flex flex-col gap-3">
             <p className="text-muted-foreground text-sm">
               {user.email} is a FirstTable admin, so it isn&apos;t mapped to restaurants — it
@@ -429,6 +429,20 @@ function DashboardContentInner() {
             <p className="text-muted-foreground text-sm">
               {user.email} isn&apos;t mapped to any restaurant. Nothing to show here —
               this is a backend-side access mapping, not something this app can fix.
+            </p>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  if (user && !user.isInternalAdmin && !access) {
+    return (
+      <main className="mx-auto max-w-4xl w-full p-8">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground text-sm">
+              You don&apos;t have access to this restaurant.
             </p>
           </CardContent>
         </Card>

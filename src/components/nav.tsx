@@ -27,8 +27,8 @@ import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 function LoginDialog() {
   const { login } = useAuth();
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("restaurant@firsttable.test");
-  const [password, setPassword] = useState("RestaurantApp2026!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,10 +69,6 @@ function LoginDialog() {
             <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
           {error && <p className="text-destructive text-sm">{error}</p>}
-          <p className="text-muted-foreground text-xs">
-            Demo account restaurant@firsttable.test (STAFF at one restaurant, MANAGER at
-            another) — password is &quot;RestaurantApp2026!&quot;.
-          </p>
           <Button type="submit" disabled={submitting}>
             {submitting ? "Logging in…" : "Log in"}
           </Button>

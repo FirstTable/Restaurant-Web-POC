@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { useApolloClient } from "@apollo/client/react";
 import { PUBLIC_GRAPHQL_URL, setUnauthenticatedHandler, tokenStore } from "@/lib/apollo-client";
 
 // Login against the real local backend's public /graphql createToken
@@ -32,6 +33,7 @@ const CREATE_TOKEN_MUTATION = /* GraphQL */ `
 `;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const client = useApolloClient();
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,20 +51,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    setUnauthenticatedHandler(logout);
-    return () => setUnauthenticatedHandler(() => {});
-  }, []);
-
-  function logout() {
+  const logout = useCallback(() => {
     setToken(null);
     tokenStore.current = null;
+    // Drop the previous user's cached data so the next login can't see it.
+    void client.clearStore();
     try {
       window.localStorage.removeItem(STORAGE_KEY);
     } catch {
       // ignore
     }
-  }
+  }, [client]);
+
+  useEffect(() => {
+    setUnauthenticatedHandler(logout);
+    return () => setUnauthenticatedHandler(() => {});
+  }, [logout]);
 
   async function login(email: string, password: string): Promise<LoginResult> {
     let json: unknown;
