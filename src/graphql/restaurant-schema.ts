@@ -112,6 +112,41 @@ function slotLocked(availabilityId: string): never {
   });
 }
 
+// The dashboard asks for one week. schedule() builds one ScheduleDay per UTC
+// date, synchronously, so a wider span has to be rejected before that loop.
+const MAX_SCHEDULE_DAYS = 7;
+const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function parseScheduleDate(value: string, field: "from" | "to"): Date {
+  // Four-digit year only: a leading sign or expanded year (Date.parse accepts
+  // both, out to the ECMAScript limits) must not reach the day loop.
+  if (typeof value !== "string" || !CALENDAR_DATE.test(value)) {
+    badUserInput("Date must be YYYY-MM-DD.", field);
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  // Date.parse overflows impossible days (2026-02-31) into a neighboring date.
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+    badUserInput("Date must be a real calendar day.", field);
+  }
+  return parsed;
+}
+
+function scheduleDates(fromRaw: string, toRaw: string): string[] {
+  const from = parseScheduleDate(fromRaw, "from");
+  const to = parseScheduleDate(toRaw, "to");
+  if (from > to) badUserInput("from must be on or before to.", "from");
+  const spanDays = Math.round((to.getTime() - from.getTime()) / MS_PER_DAY) + 1;
+  if (spanDays > MAX_SCHEDULE_DAYS) {
+    badUserInput(`Date range cannot exceed ${MAX_SCHEDULE_DAYS} days.`, "to");
+  }
+  const days: string[] = [];
+  for (let d = new Date(from); d <= to; d.setUTCDate(d.getUTCDate() + 1)) {
+    days.push(d.toISOString().slice(0, 10));
+  }
+  return days;
+}
+
 function requireAuth(context: RequestContext): MockUser {
   if (!context.currentUser) unauthenticated();
   return context.currentUser;
@@ -314,10 +349,7 @@ const resolvers = {
       context: RequestContext,
     ) => {
       requireAccess(context, args.restaurantId);
-      const days: string[] = [];
-      for (let d = new Date(`${args.from}T00:00:00Z`); d <= new Date(`${args.to}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) {
-        days.push(d.toISOString().slice(0, 10));
-      }
+      const days = scheduleDates(args.from, args.to);
       return days.map((date) => {
         const slots = availabilitySlots.filter((s) => s.restaurantId === args.restaurantId && s.date === date);
         return {
