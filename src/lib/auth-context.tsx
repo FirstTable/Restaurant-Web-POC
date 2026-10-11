@@ -92,6 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
+    // Logout uses clearStore(), which drops cached data and does not refetch
+    // anything still subscribed. Refresh those now that the new token is set.
+    // Queries skipped while logged out restart themselves when skip flips.
+    void client.refetchQueries({ include: "active" }).catch(() => {
+      // Each query hook reports its own error.
+    });
     return { ok: true };
   }
 

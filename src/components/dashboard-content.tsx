@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/tabs";
 import { RestaurantSearch } from "@/components/restaurant-search";
 import { getErrorMessage } from "@/lib/apollo-client";
+import { useAuth } from "@/lib/auth-context";
 import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
 
 // Dates are plain "YYYY-MM-DD" strings in the browser's local time (the real
@@ -336,17 +337,22 @@ export function DashboardContent() {
 function DashboardContentInner() {
   const week = useWeek();
   const editableFrom = addDays(week.today, -EDIT_WINDOW_DAYS);
+  const { token } = useAuth();
   const { user, loading: userLoading, restaurantId, access, lookupLoading, lookupError } =
     useSelectedRestaurant();
   const role = access?.role;
+  // restaurantId comes from the URL, so it stays set across logout. clearStore()
+  // wipes cached results without refetching queries that are still subscribed,
+  // and these two would keep that empty result until the week or URL changed.
+  const skip = !restaurantId || !token;
 
   const reservationsQuery = useQuery<{ reservations: Reservation[] }>(RESERVATIONS_QUERY, {
     variables: { restaurantId, from: week.from, to: week.to },
-    skip: !restaurantId,
+    skip,
   });
   const scheduleQuery = useQuery<{ schedule: ScheduleDay[] }>(SCHEDULE_QUERY, {
     variables: { restaurantId, from: week.from, to: week.to },
-    skip: !restaurantId,
+    skip,
     // Without this, .loading stays false during refetch() and the "Loading…"
     // state never shows after adding tables/availability.
     notifyOnNetworkStatusChange: true,
