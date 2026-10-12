@@ -67,55 +67,91 @@ function todayString() {
   return toDateString(new Date());
 }
 
-const WEEK_DAYS = 7;
-
 // How far back staff can still check in / mark no-show / undo — enough to
 // tidy up last night, without rewriting old no-show history. App-side only:
 // the backend accepts state changes on any date.
 const EDIT_WINDOW_DAYS = 7;
 
-// The viewed week lives in ?from=YYYY-MM-DD so a specific week is a shareable
-// link; no param means the week starting today.
-function useWeek() {
+// Monday of the calendar week containing the given date.
+function weekStart(date: string) {
+  const day = (parseDateString(date)!.getDay() + 6) % 7; // Mon=0 … Sun=6
+  return addDays(date, -day);
+}
+
+function daysBetween(from: string, to: string) {
+  return Math.round((parseDateString(to)!.getTime() - parseDateString(from)!.getTime()) / 86_400_000);
+}
+
+// The backend caps date ranges at 62 days.
+const MAX_RANGE_DAYS = 62;
+
+// The viewed range lives in ?from=&to= so a specific day or week is a
+// shareable link; no params means today.
+function useDateRange() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const today = todayString();
-  const from = parseDateString(searchParams.get("from")) ? searchParams.get("from")! : today;
+  const rawFrom = searchParams.get("from");
+  const rawTo = searchParams.get("to");
+  const from = parseDateString(rawFrom) ? rawFrom! : today;
+  const to =
+    parseDateString(rawTo) && rawTo! >= from && daysBetween(from, rawTo!) < MAX_RANGE_DAYS
+      ? rawTo!
+      : from;
 
-  function setFrom(next: string) {
+  function setRange(nextFrom: string, nextTo: string) {
     const params = new URLSearchParams(searchParams.toString());
-    if (next === today) params.delete("from");
-    else params.set("from", next);
+    params.delete("from");
+    params.delete("to");
+    if (!(nextFrom === today && nextTo === today)) {
+      params.set("from", nextFrom);
+      params.set("to", nextTo);
+    }
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
   }
 
-  return { today, from, to: addDays(from, WEEK_DAYS - 1), setFrom };
+  return { today, from, to, setRange };
 }
 
-function WeekNav({ today, from, to, setFrom }: ReturnType<typeof useWeek>) {
+function RangeNav({ today, from, to, setRange }: ReturnType<typeof useDateRange>) {
+  const length = daysBetween(from, to) + 1;
+  const thisWeekStart = weekStart(today);
+  const thisWeekEnd = addDays(thisWeekStart, 6);
+  const step = (direction: 1 | -1) =>
+    setRange(addDays(from, direction * length), addDays(to, direction * length));
+
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
-      <Button size="sm" variant="outline" onClick={() => setFrom(addDays(from, -WEEK_DAYS))}>
-        ← Previous week
+      <Button size="sm" variant="outline" onClick={() => step(-1)}>
+        ← Previous
       </Button>
-      <Button size="sm" variant={from === today ? "default" : "outline"} onClick={() => setFrom(today)}>
+      <Button
+        size="sm"
+        variant={from === today && to === today ? "default" : "outline"}
+        onClick={() => setRange(today, today)}
+      >
         Today
       </Button>
-      <Button size="sm" variant="outline" onClick={() => setFrom(addDays(from, WEEK_DAYS))}>
-        Next week →
+      <Button
+        size="sm"
+        variant={from === thisWeekStart && to === thisWeekEnd ? "default" : "outline"}
+        onClick={() => setRange(thisWeekStart, thisWeekEnd)}
+      >
+        This week
+      </Button>
+      <Button size="sm" variant="outline" onClick={() => step(1)}>
+        Next →
       </Button>
       <Input
         type="date"
         aria-label="Jump to date"
         value={from}
-        onChange={(e) => parseDateString(e.target.value) && setFrom(e.target.value)}
+        onChange={(e) => parseDateString(e.target.value) && setRange(e.target.value, e.target.value)}
         className="h-8 w-40"
       />
-      <span className="text-muted-foreground text-sm">
-        {from} – {to}
-      </span>
+      <span className="text-muted-foreground text-sm">{from === to ? from : `${from} – ${to}`}</span>
     </div>
   );
 }
@@ -335,8 +371,8 @@ export function DashboardContent() {
 }
 
 function DashboardContentInner() {
-  const week = useWeek();
-  const editableFrom = addDays(week.today, -EDIT_WINDOW_DAYS);
+  const range = useDateRange();
+  const editableFrom = addDays(range.today, -EDIT_WINDOW_DAYS);
   const { token } = useAuth();
   const { user, loading: userLoading, restaurantId, access, lookupLoading, lookupError } =
     useSelectedRestaurant();
@@ -347,11 +383,11 @@ function DashboardContentInner() {
   const skip = !restaurantId || !token;
 
   const reservationsQuery = useQuery<{ reservations: Reservation[] }>(RESERVATIONS_QUERY, {
-    variables: { restaurantId, from: week.from, to: week.to },
+    variables: { restaurantId, from: range.from, to: range.to },
     skip,
   });
   const scheduleQuery = useQuery<{ schedule: ScheduleDay[] }>(SCHEDULE_QUERY, {
-    variables: { restaurantId, from: week.from, to: week.to },
+    variables: { restaurantId, from: range.from, to: range.to },
     skip,
     // Without this, .loading stays false during refetch() and the "Loading…"
     // state never shows after adding tables/availability.
@@ -465,7 +501,7 @@ function DashboardContentInner() {
         <CardContent>
           {actionError && <p className="text-destructive text-sm mb-3">{actionError}</p>}
 
-          <WeekNav {...week} />
+          <RangeNav {...range} />
 
           <Tabs defaultValue="reservations">
             <TabsList>
@@ -479,7 +515,7 @@ function DashboardContentInner() {
                 <p className="text-destructive text-sm">{getErrorMessage(reservationsQuery.error)}</p>
               )}
               {reservationsQuery.data && reservationsQuery.data.reservations.length === 0 && (
-                <p className="text-muted-foreground text-sm">No reservations this week.</p>
+                <p className="text-muted-foreground text-sm">No reservations in this range.</p>
               )}
               {reservationsQuery.data && reservationsQuery.data.reservations.length > 0 && (
                 <Table>
@@ -577,7 +613,7 @@ function DashboardContentInner() {
                                 </TableCell>
                                 <TableCell>{slot.partySizes ?? "—"}</TableCell>
                                 <TableCell className="text-right">
-                                  {role === "MANAGER" && day.date >= week.today && (
+                                  {role === "MANAGER" && day.date >= range.today && (
                                     <Button
                                       size="sm"
                                       variant="outline"
