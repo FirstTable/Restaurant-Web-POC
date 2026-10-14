@@ -163,6 +163,7 @@ const RESERVATIONS_QUERY = gql`
   query Reservations($restaurantId: Int!, $from: String!, $to: String) {
     reservations(restaurantId: $restaurantId, from: $from, to: $to) {
       id
+      type
       guestName
       date
       time
@@ -225,9 +226,11 @@ const ADD_TABLES_MUTATION = gql`
 `;
 
 type ReservationState = "BOOKED" | "CHECKED_IN" | "NOT_APPEARED" | "CANCELLED";
+type BookingType = "FIRST_TABLE" | "REGULAR_TABLE" | "WALK_IN";
 
 interface Reservation {
   id: number;
+  type: BookingType;
   guestName: string;
   date: string;
   time: string;
@@ -556,7 +559,11 @@ function DashboardContentInner() {
                       const editable = r.date >= editableFrom;
                       return (
                         <TableRow key={r.id}>
-                          <TableCell>{r.guestName}{r.firstVisit && <span className="text-muted-foreground text-xs"> (first visit)</span>}</TableCell>
+                          <TableCell>
+                            {r.guestName}
+                            {r.type === "WALK_IN" && <Badge variant="outline" className="ml-2">Dine Now</Badge>}
+                            {r.firstVisit && <span className="text-muted-foreground text-xs"> (first visit)</span>}
+                          </TableCell>
                           <TableCell>{r.partySize}</TableCell>
                           <TableCell>{r.date}</TableCell>
                           <TableCell>{formatTimeOfDay(r.time)}</TableCell>
