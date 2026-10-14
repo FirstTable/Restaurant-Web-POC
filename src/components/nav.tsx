@@ -111,9 +111,7 @@ export function Nav() {
             )}
             {user.isInternalAdmin && <RestaurantSearch compact />}
             {access && (
-              <Badge variant={access.role === "MANAGER" ? "default" : "secondary"}>
-                {access.role}
-              </Badge>
+              <Badge variant="secondary">{access.role}</Badge>
             )}
             <Button size="sm" variant="outline" onClick={logout}>
               Log out

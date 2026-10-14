@@ -8,6 +8,7 @@ import {
   type RestaurantAccess,
   type RestaurantSummary,
 } from "@/lib/use-current-user";
+import { PERMISSIONS, type Permission } from "@/lib/permissions";
 
 const RESTAURANT_QUERY = gql`
   query Restaurant($id: Int!) {
@@ -27,15 +28,15 @@ function parseRestaurantId(raw: string | string[] | undefined): number | null {
 }
 
 // The restaurant the nav/dashboard are scoped to, and the current user's
-// access (role + restaurant) for it. Scoping lives in the URL
+// access (role + permissions) for it. Scoping lives in the URL
 // (/dashboard/[restaurantId]) rather than component state, so a specific
 // venue's dashboard is a real, shareable link — falls back to the user's
 // first authorized restaurant when there's no id in the URL (e.g. on /).
 //
 // Internal admins come back with an empty `access` list by design: the
 // backend lets them act on any restaurant rather than listing every one. For
-// them the selected restaurant is fetched by ID and treated as MANAGER, which
-// is what RestaurantAccessService grants on the backend.
+// them the selected restaurant is fetched by ID and treated as holding every
+// permission, which is what RestaurantAccessService grants on the backend.
 export function useSelectedRestaurant() {
   const { user, loading } = useCurrentUser();
   const router = useRouter();
@@ -53,8 +54,12 @@ export function useSelectedRestaurant() {
   const access: RestaurantAccess | null =
     mapped ??
     (needsLookup && lookup.data?.restaurant
-      ? { role: "MANAGER", restaurant: lookup.data.restaurant }
+      ? { role: "FirstTable admin", permissions: [...PERMISSIONS], restaurant: lookup.data.restaurant }
       : null);
+
+  // Admins hold every permission even at restaurants they're mapped to.
+  const permissions: Permission[] = user?.isInternalAdmin ? [...PERMISSIONS] : access?.permissions ?? [];
+  const can = (permission: Permission) => permissions.includes(permission);
 
   function setRestaurantId(id: number) {
     router.push(`/dashboard/${id}`);
@@ -65,6 +70,8 @@ export function useSelectedRestaurant() {
     loading,
     restaurantId,
     access,
+    permissions,
+    can,
     lookupLoading: needsLookup && lookup.loading,
     lookupError: needsLookup ? lookup.error ?? null : null,
     setRestaurantId,
