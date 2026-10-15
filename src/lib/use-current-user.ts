@@ -3,6 +3,7 @@
 import { gql } from "@apollo/client";
 import { useQuery } from "@apollo/client/react";
 import { useAuth } from "@/lib/auth-context";
+import type { Permission } from "@/lib/permissions";
 
 export const ME_QUERY = gql`
   query Me {
@@ -14,6 +15,7 @@ export const ME_QUERY = gql`
       isInternalAdmin
       access {
         role
+        permissions
         restaurant {
           id
           title
@@ -24,8 +26,6 @@ export const ME_QUERY = gql`
   }
 `;
 
-export type RestaurantRole = "STAFF" | "MANAGER";
-
 export interface RestaurantSummary {
   id: number;
   title: string;
@@ -33,7 +33,10 @@ export interface RestaurantSummary {
 }
 
 export interface RestaurantAccess {
-  role: RestaurantRole;
+  // Display name only (e.g. "Owner", or a venue's own "Host") — gate features
+  // on `permissions`, never on this.
+  role: string;
+  permissions: Permission[];
   restaurant: RestaurantSummary;
 }
 

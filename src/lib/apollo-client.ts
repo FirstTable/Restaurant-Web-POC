@@ -36,6 +36,17 @@ export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// The backend's numeric `code` (400 / 403 / 404 …) for a caught Apollo error.
+export function getErrorCode(error: unknown): number | undefined {
+  if (ServerError.is(error)) {
+    return parseRestaurantApiErrors(error.bodyText)[0]?.code ?? error.statusCode;
+  }
+  if (CombinedGraphQLErrors.is(error)) {
+    return (error.errors[0] as RestaurantApiError | undefined)?.code;
+  }
+  return undefined;
+}
+
 // API host varies per environment — firsttable.local only resolves on a
 // dev machine with the right /etc/hosts entry, staging/prod point at a real
 // cluster. Set NEXT_PUBLIC_API_HOST to override; both endpoints share the

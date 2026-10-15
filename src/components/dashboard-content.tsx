@@ -37,7 +37,10 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { ActivityPanel } from "@/components/activity-panel";
 import { RestaurantSearch } from "@/components/restaurant-search";
+import { RolesPanel } from "@/components/roles-panel";
+import { TeamPanel } from "@/components/team-panel";
 import { getErrorMessage } from "@/lib/apollo-client";
 import { useAuth } from "@/lib/auth-context";
 import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
@@ -160,6 +163,7 @@ const RESERVATIONS_QUERY = gql`
   query Reservations($restaurantId: Int!, $from: String!, $to: String) {
     reservations(restaurantId: $restaurantId, from: $from, to: $to) {
       id
+      type
       guestName
       date
       time
@@ -222,9 +226,11 @@ const ADD_TABLES_MUTATION = gql`
 `;
 
 type ReservationState = "BOOKED" | "CHECKED_IN" | "NOT_APPEARED" | "CANCELLED";
+type BookingType = "FIRST_TABLE" | "REGULAR_TABLE" | "WALK_IN";
 
 interface Reservation {
   id: number;
+  type: BookingType;
   guestName: string;
   date: string;
   time: string;
@@ -374,21 +380,32 @@ function DashboardContentInner() {
   const range = useDateRange();
   const editableFrom = addDays(range.today, -EDIT_WINDOW_DAYS);
   const { token } = useAuth();
-  const { user, loading: userLoading, restaurantId, access, lookupLoading, lookupError } =
+  const { user, loading: userLoading, restaurantId, access, can, lookupLoading, lookupError } =
     useSelectedRestaurant();
-  const role = access?.role;
   // restaurantId comes from the URL, so it stays set across logout. clearStore()
   // wipes cached results without refetching queries that are still subscribed,
   // and these two would keep that empty result until the week or URL changed.
   const skip = !restaurantId || !token;
 
+  // Tabs the user's permissions at this restaurant allow, in display order.
+  const tabs = [
+    can("VIEW_RESERVATIONS") && { value: "reservations", label: "Reservations" },
+    can("VIEW_SCHEDULE") && { value: "schedule", label: "Schedule" },
+    can("MANAGE_TEAM") && { value: "team", label: "Team" },
+    can("MANAGE_ROLES") && { value: "roles", label: "Roles" },
+    can("MANAGE_TEAM") && { value: "activity", label: "Activity" },
+  ].filter((t) => !!t);
+  const [selectedTab, setSelectedTab] = useState("reservations");
+  // Falls back to the first allowed tab when permissions change under us.
+  const tab = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0]?.value;
+
   const reservationsQuery = useQuery<{ reservations: Reservation[] }>(RESERVATIONS_QUERY, {
     variables: { restaurantId, from: range.from, to: range.to },
-    skip,
+    skip: skip || !can("VIEW_RESERVATIONS"),
   });
   const scheduleQuery = useQuery<{ schedule: ScheduleDay[] }>(SCHEDULE_QUERY, {
     variables: { restaurantId, from: range.from, to: range.to },
-    skip,
+    skip: skip || !can("VIEW_SCHEDULE"),
     // Without this, .loading stays false during refetch() and the "Loading…"
     // state never shows after adding tables/availability.
     notifyOnNetworkStatusChange: true,
@@ -501,12 +518,19 @@ function DashboardContentInner() {
         <CardContent>
           {actionError && <p className="text-destructive text-sm mb-3">{actionError}</p>}
 
-          <RangeNav {...range} />
+          {tabs.length === 0 && (
+            <p className="text-muted-foreground text-sm">
+              Your role here ({access?.role}) doesn&apos;t include any features yet.
+            </p>
+          )}
 
-          <Tabs defaultValue="reservations">
+          {(tab === "reservations" || tab === "schedule") && <RangeNav {...range} />}
+
+          <Tabs value={tab} onValueChange={setSelectedTab}>
             <TabsList>
-              <TabsTrigger value="reservations">Reservations</TabsTrigger>
-              <TabsTrigger value="schedule">Schedule</TabsTrigger>
+              {tabs.map((t) => (
+                <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>
+              ))}
             </TabsList>
 
             <TabsContent value="reservations">
@@ -535,7 +559,11 @@ function DashboardContentInner() {
                       const editable = r.date >= editableFrom;
                       return (
                         <TableRow key={r.id}>
-                          <TableCell>{r.guestName}{r.firstVisit && <span className="text-muted-foreground text-xs"> (first visit)</span>}</TableCell>
+                          <TableCell>
+                            {r.guestName}
+                            {r.type === "WALK_IN" && <Badge variant="outline" className="ml-2">Dine Now</Badge>}
+                            {r.firstVisit && <span className="text-muted-foreground text-xs"> (first visit)</span>}
+                          </TableCell>
                           <TableCell>{r.partySize}</TableCell>
                           <TableCell>{r.date}</TableCell>
                           <TableCell>{formatTimeOfDay(r.time)}</TableCell>
@@ -543,7 +571,7 @@ function DashboardContentInner() {
                             <Badge variant={stateVariant[r.state]}>{r.state}</Badge>
                           </TableCell>
                           <TableCell className="flex gap-2 justify-end">
-                            {r.state === "CANCELLED" ? null : !editable ? (
+                            {r.state === "CANCELLED" || !can("CHANGE_RESERVATION_STATE") ? null : !editable ? (
                               <span
                                 className="text-muted-foreground text-xs"
                                 title={`Reservations older than ${EDIT_WINDOW_DAYS} days can't be changed`}
@@ -574,7 +602,7 @@ function DashboardContentInner() {
             </TabsContent>
 
             <TabsContent value="schedule">
-              {role === "MANAGER" && restaurantId && (
+              {can("ADD_AVAILABILITY") && restaurantId && (
                 <div className="mb-3 flex justify-end">
                   <AddAvailabilityDialog restaurantId={restaurantId} onDone={() => scheduleQuery.refetch()} />
                 </div>
@@ -613,7 +641,7 @@ function DashboardContentInner() {
                                 </TableCell>
                                 <TableCell>{slot.partySizes ?? "—"}</TableCell>
                                 <TableCell className="text-right">
-                                  {role === "MANAGER" && day.date >= range.today && (
+                                  {can("ADD_TABLES") && day.date >= range.today && (
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -635,6 +663,14 @@ function DashboardContentInner() {
                 </div>
               )}
             </TabsContent>
+
+            {restaurantId && (
+              <>
+                <TabsContent value="team"><TeamPanel restaurantId={restaurantId} /></TabsContent>
+                <TabsContent value="roles"><RolesPanel restaurantId={restaurantId} /></TabsContent>
+                <TabsContent value="activity"><ActivityPanel restaurantId={restaurantId} /></TabsContent>
+              </>
+            )}
           </Tabs>
         </CardContent>
       </Card>
