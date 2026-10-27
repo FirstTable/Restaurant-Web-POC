@@ -1,7 +1,6 @@
 // Shared read-only fixtures for both mock endpoints (public login + restaurant
 // API), matching the PD-6967 handover's mock-data.json.
 
-export type RestaurantRole = "STAFF" | "MANAGER";
 export type Session = "BREAKFAST" | "LUNCH" | "DINNER" | "DINNER2";
 
 export interface Restaurant {
@@ -13,11 +12,6 @@ export interface Restaurant {
   sessions: Session[];
 }
 
-export interface Access {
-  restaurantId: string;
-  role: RestaurantRole;
-}
-
 export interface MockUser {
   id: string;
   firstName: string;
@@ -25,7 +19,9 @@ export interface MockUser {
   email: string;
   password: string;
   token: string;
-  access: Access[];
+  restaurantIds: string[];
+  // The "Limit availability by pax" permission (AVAILABILITY_LIMIT_BY_PAX).
+  canLimitByPax: boolean;
 }
 
 export const restaurants: Restaurant[] = [
@@ -42,10 +38,8 @@ export const users: MockUser[] = [
     email: "manager@example.com",
     password: "password",
     token: "mock.jwt.user1",
-    access: [
-      { restaurantId: "101", role: "MANAGER" },
-      { restaurantId: "102", role: "STAFF" },
-    ],
+    restaurantIds: ["101", "102"],
+    canLimitByPax: true,
   },
   {
     id: "2",
@@ -54,7 +48,8 @@ export const users: MockUser[] = [
     email: "staff@example.com",
     password: "password",
     token: "mock.jwt.user2",
-    access: [{ restaurantId: "103", role: "STAFF" }],
+    restaurantIds: ["103"],
+    canLimitByPax: false,
   },
 ];
 

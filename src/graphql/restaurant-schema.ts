@@ -4,13 +4,14 @@ import { restaurants, findUserByToken, type MockUser, type Session } from "@/gra
 
 // Mock of the proposed /restaurant-graphql endpoint (PD-6967 handover).
 // Auth: Application-Authorization: Bearer <token>, token from createToken
-// on the public schema. Role is per-restaurant (currentUser.access[]).
+// on the public schema. V1 has one access level: any listed restaurant
+// (currentUser.restaurantIds) gets every operation.
 
 export interface RequestContext {
   currentUser?: MockUser;
 }
 
-type ReservationState = "BOOKED" | "CHECKED_IN" | "NOT_APPEARED" | "CANCELLED";
+type ReservationState = "BOOKED" | "NOT_APPEARED" | "CANCELLED";
 type CapacityLimit = "TABLES" | "PAX" | "BOTH";
 
 interface Reservation {
@@ -25,8 +26,6 @@ interface Reservation {
   session: Session;
   partySize: number;
   state: ReservationState;
-  checkedInAt: string | null;
-  notAppearedAt: string | null;
   dietaryRequirements: string | null;
   comments: string | null;
   firstVisit: boolean;
@@ -52,15 +51,15 @@ interface AvailabilitySlot {
 // --- seed data, matching the handover's mock-data.json -------------------
 
 const reservations: Reservation[] = [
-  { id: "9001", restaurantId: "101", reference: "FT8K2QDX", guestName: "Priya Nair", phone: "+64 21 555 0143", date: "2026-10-04", time: "18:00:00", dateTimeUTC: "2026-10-04T05:00:00Z", session: "DINNER", partySize: 2, state: "CHECKED_IN", checkedInAt: "2026-10-04T05:03:11Z", notAppearedAt: null, dietaryRequirements: "One gluten free", comments: "Anniversary — window table if possible", firstVisit: true },
-  { id: "9002", restaurantId: "101", reference: "FT4M7PLA", guestName: "Tom Whitaker", phone: "+64 27 555 0918", date: "2026-10-04", time: "18:15:00", dateTimeUTC: "2026-10-04T05:15:00Z", session: "DINNER", partySize: 4, state: "BOOKED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: null, comments: null, firstVisit: false },
-  { id: "9003", restaurantId: "101", reference: "FT1Z9RBN", guestName: "Mei Lin", phone: "+64 22 555 0277", date: "2026-10-04", time: "18:30:00", dateTimeUTC: "2026-10-04T05:30:00Z", session: "DINNER", partySize: 2, state: "NOT_APPEARED", checkedInAt: null, notAppearedAt: "2026-10-04T05:52:40Z", dietaryRequirements: null, comments: null, firstVisit: true },
-  { id: "9004", restaurantId: "101", reference: "FT6Q3WKE", guestName: "Daniel Osei", phone: "+64 21 555 0466", date: "2026-10-05", time: "12:00:00", dateTimeUTC: "2026-10-04T23:00:00Z", session: "LUNCH", partySize: 3, state: "BOOKED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: "Nut allergy", comments: null, firstVisit: false },
-  { id: "9005", restaurantId: "101", reference: "FT2H8VCT", guestName: "Ellie Barnes", phone: null, date: "2026-10-05", time: "18:00:00", dateTimeUTC: "2026-10-05T05:00:00Z", session: "DINNER", partySize: 6, state: "CANCELLED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: null, comments: null, firstVisit: false },
-  { id: "9101", restaurantId: "103", reference: "FT5R1NDQ", guestName: "Jonah Patel", phone: "+64 21 555 0788", date: "2026-10-04", time: "19:00:00", dateTimeUTC: "2026-10-04T06:00:00Z", session: "DINNER", partySize: 2, state: "BOOKED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: null, comments: null, firstVisit: true },
-  { id: "9201", restaurantId: "102", reference: "FT9L4XKM", guestName: "Harriet Cole", phone: "+64 21 555 0512", date: "2026-10-04", time: "19:00:00", dateTimeUTC: "2026-10-04T06:00:00Z", session: "DINNER", partySize: 2, state: "BOOKED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: null, comments: null, firstVisit: false },
-  { id: "9202", restaurantId: "102", reference: "FT3P7HDW", guestName: "Marcus Webb", phone: "+64 27 555 0364", date: "2026-10-04", time: "19:30:00", dateTimeUTC: "2026-10-04T06:30:00Z", session: "DINNER", partySize: 5, state: "BOOKED", checkedInAt: null, notAppearedAt: null, dietaryRequirements: "Vegetarian x2", comments: "Birthday", firstVisit: true },
-  { id: "9203", restaurantId: "102", reference: "FT6V2QRS", guestName: "Nina Patel", phone: null, date: "2026-10-05", time: "19:00:00", dateTimeUTC: "2026-10-05T06:00:00Z", session: "DINNER", partySize: 3, state: "CHECKED_IN", checkedInAt: "2026-10-05T06:04:22Z", notAppearedAt: null, dietaryRequirements: null, comments: null, firstVisit: false },
+  { id: "9001", restaurantId: "101", reference: "FT8K2QDX", guestName: "Priya Nair", phone: "+64 21 555 0143", date: "2026-10-04", time: "18:00:00", dateTimeUTC: "2026-10-04T05:00:00Z", session: "DINNER", partySize: 2, state: "BOOKED", dietaryRequirements: "One gluten free", comments: "Anniversary — window table if possible", firstVisit: true },
+  { id: "9002", restaurantId: "101", reference: "FT4M7PLA", guestName: "Tom Whitaker", phone: "+64 27 555 0918", date: "2026-10-04", time: "18:15:00", dateTimeUTC: "2026-10-04T05:15:00Z", session: "DINNER", partySize: 4, state: "BOOKED", dietaryRequirements: null, comments: null, firstVisit: false },
+  { id: "9003", restaurantId: "101", reference: "FT1Z9RBN", guestName: "Mei Lin", phone: "+64 22 555 0277", date: "2026-10-04", time: "18:30:00", dateTimeUTC: "2026-10-04T05:30:00Z", session: "DINNER", partySize: 2, state: "NOT_APPEARED", dietaryRequirements: null, comments: null, firstVisit: true },
+  { id: "9004", restaurantId: "101", reference: "FT6Q3WKE", guestName: "Daniel Osei", phone: "+64 21 555 0466", date: "2026-10-05", time: "12:00:00", dateTimeUTC: "2026-10-04T23:00:00Z", session: "LUNCH", partySize: 3, state: "BOOKED", dietaryRequirements: "Nut allergy", comments: null, firstVisit: false },
+  { id: "9005", restaurantId: "101", reference: "FT2H8VCT", guestName: "Ellie Barnes", phone: null, date: "2026-10-05", time: "18:00:00", dateTimeUTC: "2026-10-05T05:00:00Z", session: "DINNER", partySize: 6, state: "CANCELLED", dietaryRequirements: null, comments: null, firstVisit: false },
+  { id: "9101", restaurantId: "103", reference: "FT5R1NDQ", guestName: "Jonah Patel", phone: "+64 21 555 0788", date: "2026-10-04", time: "19:00:00", dateTimeUTC: "2026-10-04T06:00:00Z", session: "DINNER", partySize: 2, state: "BOOKED", dietaryRequirements: null, comments: null, firstVisit: true },
+  { id: "9201", restaurantId: "102", reference: "FT9L4XKM", guestName: "Harriet Cole", phone: "+64 21 555 0512", date: "2026-10-04", time: "19:00:00", dateTimeUTC: "2026-10-04T06:00:00Z", session: "DINNER", partySize: 2, state: "BOOKED", dietaryRequirements: null, comments: null, firstVisit: false },
+  { id: "9202", restaurantId: "102", reference: "FT3P7HDW", guestName: "Marcus Webb", phone: "+64 27 555 0364", date: "2026-10-04", time: "19:30:00", dateTimeUTC: "2026-10-04T06:30:00Z", session: "DINNER", partySize: 5, state: "BOOKED", dietaryRequirements: "Vegetarian x2", comments: "Birthday", firstVisit: true },
+  { id: "9203", restaurantId: "102", reference: "FT6V2QRS", guestName: "Nina Patel", phone: null, date: "2026-10-05", time: "19:00:00", dateTimeUTC: "2026-10-05T06:00:00Z", session: "DINNER", partySize: 3, state: "BOOKED", dietaryRequirements: null, comments: null, firstVisit: false },
 ];
 
 let availabilitySlots: AvailabilitySlot[] = [
@@ -88,10 +87,11 @@ function forbiddenRestaurant(restaurantId: string): never {
   });
 }
 
-function forbiddenRole(restaurantId: string, requiredRole: string): never {
-  throw createGraphQLError(`This action requires the ${requiredRole} role.`, {
-    extensions: { code: "FORBIDDEN", requiredRole, restaurantId, http: { status: 403 } },
-  });
+function forbiddenPaxLimit(): never {
+  throw createGraphQLError(
+    'Limiting by pax or choosing party sizes needs the "Limit availability by pax" permission.',
+    { extensions: { code: "FORBIDDEN", http: { status: 403 } } },
+  );
 }
 
 function notFound(message: string): never {
@@ -154,14 +154,8 @@ function requireAuth(context: RequestContext): MockUser {
 
 function requireAccess(context: RequestContext, restaurantId: string) {
   const user = requireAuth(context);
-  const access = user.access.find((a) => a.restaurantId === restaurantId);
-  if (!access) forbiddenRestaurant(restaurantId);
-  return access;
-}
-
-function requireRole(context: RequestContext, restaurantId: string, role: "MANAGER") {
-  const access = requireAccess(context, restaurantId);
-  if (access.role !== role) forbiddenRole(restaurantId, role);
+  if (!user.restaurantIds.includes(restaurantId)) forbiddenRestaurant(restaurantId);
+  return user;
 }
 
 // --- scalars ---------------------------------------------------------------
@@ -182,11 +176,6 @@ const typeDefs = /* GraphQL */ `
   scalar Time
   scalar DateTime
 
-  enum RestaurantRole {
-    STAFF
-    MANAGER
-  }
-
   enum Session {
     BREAKFAST
     LUNCH
@@ -196,14 +185,12 @@ const typeDefs = /* GraphQL */ `
 
   enum ReservationState {
     BOOKED
-    CHECKED_IN
     NOT_APPEARED
     CANCELLED
   }
 
   enum ReservationStateChange {
     BOOKED
-    CHECKED_IN
     NOT_APPEARED
   }
 
@@ -218,12 +205,8 @@ const typeDefs = /* GraphQL */ `
     firstName: String
     surname: String
     email: String!
-    access: [RestaurantAccess!]!
-  }
-
-  type RestaurantAccess {
-    restaurant: Restaurant!
-    role: RestaurantRole!
+    isInternalAdmin: Boolean!
+    restaurants: [Restaurant!]!
   }
 
   type Restaurant {
@@ -246,8 +229,6 @@ const typeDefs = /* GraphQL */ `
     session: Session!
     partySize: Int!
     state: ReservationState!
-    checkedInAt: DateTime
-    notAppearedAt: DateTime
     dietaryRequirements: String
     comments: String
     firstVisit: Boolean!
@@ -313,9 +294,9 @@ const resolvers = {
   Time: passthroughScalar("Time"),
   DateTime: passthroughScalar("DateTime"),
 
-  RestaurantAccess: {
-    restaurant: (access: { restaurantId: string }) =>
-      restaurants.find((r) => r.id === access.restaurantId),
+  RestaurantUser: {
+    isInternalAdmin: () => false,
+    restaurants: (user: MockUser) => restaurants.filter((r) => user.restaurantIds.includes(r.id)),
   },
 
   Query: {
@@ -366,7 +347,7 @@ const resolvers = {
   Mutation: {
     changeReservationState: (
       _: unknown,
-      args: { restaurantId: string; reservationId: string; state: "BOOKED" | "CHECKED_IN" | "NOT_APPEARED" },
+      args: { restaurantId: string; reservationId: string; state: "BOOKED" | "NOT_APPEARED" },
       context: RequestContext,
     ) => {
       requireAccess(context, args.restaurantId);
@@ -375,10 +356,7 @@ const resolvers = {
       if (reservation.state === "CANCELLED") {
         badUserInput("Cannot change the state of a cancelled reservation.", "state");
       }
-      const now = new Date().toISOString();
       reservation.state = args.state;
-      reservation.checkedInAt = args.state === "CHECKED_IN" ? now : null;
-      reservation.notAppearedAt = args.state === "NOT_APPEARED" ? now : null;
       return reservation;
     },
     addAvailability: (
@@ -398,8 +376,11 @@ const resolvers = {
       context: RequestContext,
     ) => {
       const { input } = args;
-      requireRole(context, input.restaurantId, "MANAGER");
+      const user = requireAccess(context, input.restaurantId);
       if (input.tables <= 0) badUserInput("tables must be greater than zero.", "input.tables");
+      const usesPax =
+        input.limitBy === "PAX" || input.limitBy === "BOTH" || input.paxAvailable != null || input.partySizes != null;
+      if (usesPax && !user.canLimitByPax) forbiddenPaxLimit();
       const limitBy = input.limitBy ?? "TABLES";
       if ((limitBy === "PAX" || limitBy === "BOTH") && input.paxAvailable == null) {
         badUserInput("paxAvailable is required when limitBy is PAX or BOTH.", "input.paxAvailable");
@@ -432,7 +413,7 @@ const resolvers = {
       context: RequestContext,
     ) => {
       const { input } = args;
-      requireRole(context, input.restaurantId, "MANAGER");
+      requireAccess(context, input.restaurantId);
       if (input.tables <= 0) badUserInput("tables must be greater than zero.", "input.tables");
       const slot = availabilitySlots.find((s) => s.id === input.availabilityId && s.restaurantId === input.restaurantId);
       if (!slot) notFound("Availability slot not found.");

@@ -67,7 +67,7 @@ function todayString() {
   return toDateString(new Date());
 }
 
-// How far back staff can still check in / mark no-show / undo — enough to
+// How far back staff can still mark a no-show or undo one — enough to
 // tidy up last night, without rewriting old no-show history. App-side only:
 // the backend accepts state changes on any date.
 const EDIT_WINDOW_DAYS = 7;
@@ -82,7 +82,7 @@ function daysBetween(from: string, to: string) {
   return Math.round((parseDateString(to)!.getTime() - parseDateString(from)!.getTime()) / 86_400_000);
 }
 
-// The backend caps date ranges at 62 days.
+// The backend rejects ranges of 62 days or more, counting both ends.
 const MAX_RANGE_DAYS = 62;
 
 // The viewed range lives in ?from=&to= so a specific day or week is a
@@ -96,7 +96,7 @@ function useDateRange() {
   const rawTo = searchParams.get("to");
   const from = parseDateString(rawFrom) ? rawFrom! : today;
   const to =
-    parseDateString(rawTo) && rawTo! >= from && daysBetween(from, rawTo!) < MAX_RANGE_DAYS
+    parseDateString(rawTo) && rawTo! >= from && daysBetween(from, rawTo!) + 1 < MAX_RANGE_DAYS
       ? rawTo!
       : from;
 
@@ -221,7 +221,7 @@ const ADD_TABLES_MUTATION = gql`
   }
 `;
 
-type ReservationState = "BOOKED" | "CHECKED_IN" | "NOT_APPEARED" | "CANCELLED";
+type ReservationState = "BOOKED" | "NOT_APPEARED" | "CANCELLED";
 
 interface Reservation {
   id: number;
@@ -259,7 +259,6 @@ interface ScheduleDay {
 
 const stateVariant: Record<ReservationState, "default" | "secondary" | "outline"> = {
   BOOKED: "outline",
-  CHECKED_IN: "default",
   NOT_APPEARED: "secondary",
   CANCELLED: "secondary",
 };
@@ -304,6 +303,8 @@ function AddAvailabilityDialog({ restaurantId, onDone }: { restaurantId: number;
             date,
             session,
             times: times.split(",").map((t) => t.trim()),
+            // Pax limits and party sizes need the "Limit availability by
+            // pax" permission (403 otherwise), so this form only offers tables.
             limitBy: "TABLES",
             tables: Number(tables),
           },
@@ -374,9 +375,8 @@ function DashboardContentInner() {
   const range = useDateRange();
   const editableFrom = addDays(range.today, -EDIT_WINDOW_DAYS);
   const { token } = useAuth();
-  const { user, loading: userLoading, restaurantId, access, lookupLoading, lookupError } =
+  const { user, loading: userLoading, restaurantId, restaurant, lookupLoading, lookupError } =
     useSelectedRestaurant();
-  const role = access?.role;
   // restaurantId comes from the URL, so it stays set across logout. clearStore()
   // wipes cached results without refetching queries that are still subscribed,
   // and these two would keep that empty result until the week or URL changed.
@@ -397,19 +397,20 @@ function DashboardContentInner() {
   const [changeState, { loading: changeStateLoading }] = useMutation(CHANGE_STATE_MUTATION);
   const [addTables, { loading: addTablesLoading }] = useMutation(ADD_TABLES_MUTATION);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [pendingReservation, setPendingReservation] = useState<{ id: number; state: string } | null>(null);
+  const [pendingReservationId, setPendingReservationId] = useState<number | null>(null);
   const [pendingSlotId, setPendingSlotId] = useState<number | null>(null);
 
-  async function handleChangeState(reservationId: number, state: string) {
+  // NOT_APPEARED marks a no-show; BOOKED undoes it.
+  async function handleChangeState(reservationId: number, state: "BOOKED" | "NOT_APPEARED") {
     if (changeStateLoading) return; // already mid-flight — ignore a repeat click
     setActionError(null);
-    setPendingReservation({ id: reservationId, state });
+    setPendingReservationId(reservationId);
     try {
       await changeState({ variables: { restaurantId, reservationId, state } });
     } catch (err) {
       setActionError(getErrorMessage(err));
     } finally {
-      setPendingReservation(null);
+      setPendingReservationId(null);
     }
   }
 
@@ -441,7 +442,7 @@ function DashboardContentInner() {
     );
   }
 
-  if (user?.isInternalAdmin && (restaurantId == null || !access)) {
+  if (user?.isInternalAdmin && (restaurantId == null || !restaurant)) {
     return (
       <main className="mx-auto max-w-4xl w-full p-8">
         <Card className="overflow-visible">
@@ -463,7 +464,7 @@ function DashboardContentInner() {
     );
   }
 
-  if (user && !user.isInternalAdmin && user.access.length === 0) {
+  if (user && !user.isInternalAdmin && user.restaurants.length === 0) {
     return (
       <main className="mx-auto max-w-4xl w-full p-8">
         <Card>
@@ -478,7 +479,7 @@ function DashboardContentInner() {
     );
   }
 
-  if (user && !user.isInternalAdmin && !access) {
+  if (user && !user.isInternalAdmin && !restaurant) {
     return (
       <main className="mx-auto max-w-4xl w-full p-8">
         <Card>
@@ -496,7 +497,7 @@ function DashboardContentInner() {
     <main className="mx-auto max-w-4xl w-full p-8">
       <Card>
         <CardHeader>
-          <CardTitle>{access?.restaurant.title ?? "Restaurant Dashboard"}</CardTitle>
+          <CardTitle>{restaurant?.title ?? "Restaurant Dashboard"}</CardTitle>
         </CardHeader>
         <CardContent>
           {actionError && <p className="text-destructive text-sm mb-3">{actionError}</p>}
@@ -531,11 +532,14 @@ function DashboardContentInner() {
                   </TableHeader>
                   <TableBody>
                     {reservationsQuery.data.reservations.map((r) => {
-                      const isPending = pendingReservation?.id === r.id;
+                      const isPending = pendingReservationId === r.id;
                       const editable = r.date >= editableFrom;
                       return (
                         <TableRow key={r.id}>
-                          <TableCell>{r.guestName}{r.firstVisit && <span className="text-muted-foreground text-xs"> (first visit)</span>}</TableCell>
+                          <TableCell>
+                            {r.guestName}
+                            {r.firstVisit && <span className="text-muted-foreground text-xs"> (first visit)</span>}
+                          </TableCell>
                           <TableCell>{r.partySize}</TableCell>
                           <TableCell>{r.date}</TableCell>
                           <TableCell>{formatTimeOfDay(r.time)}</TableCell>
@@ -551,14 +555,9 @@ function DashboardContentInner() {
                                 Read-only
                               </span>
                             ) : r.state === "BOOKED" ? (
-                              <>
-                                <Button size="sm" variant="outline" disabled={isPending} onClick={() => handleChangeState(r.id, "CHECKED_IN")}>
-                                  {isPending && pendingReservation?.state === "CHECKED_IN" ? "Checking in…" : "Check in"}
-                                </Button>
-                                <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChangeState(r.id, "NOT_APPEARED")}>
-                                  {isPending && pendingReservation?.state === "NOT_APPEARED" ? "Marking…" : "No-show"}
-                                </Button>
-                              </>
+                              <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChangeState(r.id, "NOT_APPEARED")}>
+                                {isPending ? "Marking…" : "No-show"}
+                              </Button>
                             ) : (
                               <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChangeState(r.id, "BOOKED")}>
                                 {isPending ? "Undoing…" : "Undo"}
@@ -574,7 +573,7 @@ function DashboardContentInner() {
             </TabsContent>
 
             <TabsContent value="schedule">
-              {role === "MANAGER" && restaurantId && (
+              {restaurantId && (
                 <div className="mb-3 flex justify-end">
                   <AddAvailabilityDialog restaurantId={restaurantId} onDone={() => scheduleQuery.refetch()} />
                 </div>
@@ -613,7 +612,7 @@ function DashboardContentInner() {
                                 </TableCell>
                                 <TableCell>{slot.partySizes ?? "—"}</TableCell>
                                 <TableCell className="text-right">
-                                  {role === "MANAGER" && day.date >= range.today && (
+                                  {day.date >= range.today && (
                                     <Button
                                       size="sm"
                                       variant="outline"

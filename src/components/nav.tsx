@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -80,7 +79,7 @@ function LoginDialog() {
 
 export function Nav() {
   const { logout } = useAuth();
-  const { user, restaurantId, access, setRestaurantId } = useSelectedRestaurant();
+  const { user, restaurantId, setRestaurantId } = useSelectedRestaurant();
 
   return (
     <header className="border-b">
@@ -92,7 +91,7 @@ export function Nav() {
         {user ? (
           <div className="flex items-center gap-3">
             <span className="text-sm">{user.firstName} {user.surname}</span>
-            {user.access.length > 1 && (
+            {user.restaurants.length > 1 && (
               <Select
                 value={restaurantId != null ? String(restaurantId) : undefined}
                 onValueChange={(v) => setRestaurantId(Number(v))}
@@ -101,20 +100,15 @@ export function Nav() {
                   <SelectValue placeholder="Restaurant" />
                 </SelectTrigger>
                 <SelectContent>
-                  {user.access.map((a) => (
-                    <SelectItem key={a.restaurant.id} value={String(a.restaurant.id)}>
-                      {a.restaurant.title}
+                  {user.restaurants.map((r) => (
+                    <SelectItem key={r.id} value={String(r.id)}>
+                      {r.title}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             )}
             {user.isInternalAdmin && <RestaurantSearch compact />}
-            {access && (
-              <Badge variant={access.role === "MANAGER" ? "default" : "secondary"}>
-                {access.role}
-              </Badge>
-            )}
             <Button size="sm" variant="outline" onClick={logout}>
               Log out
             </Button>

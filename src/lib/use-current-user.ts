@@ -12,19 +12,14 @@ export const ME_QUERY = gql`
       surname
       email
       isInternalAdmin
-      access {
-        role
-        restaurant {
-          id
-          title
-          city
-        }
+      restaurants {
+        id
+        title
+        city
       }
     }
   }
 `;
-
-export type RestaurantRole = "STAFF" | "MANAGER";
 
 export interface RestaurantSummary {
   id: number;
@@ -32,18 +27,15 @@ export interface RestaurantSummary {
   city: string | null;
 }
 
-export interface RestaurantAccess {
-  role: RestaurantRole;
-  restaurant: RestaurantSummary;
-}
-
+// V1 has a single access level: every listed restaurant gets the same
+// (manager-level) features, so there's no role or permission list to gate on.
 export interface CurrentUser {
   id: number;
   firstName: string | null;
   surname: string | null;
   email: string;
   isInternalAdmin: boolean;
-  access: RestaurantAccess[];
+  restaurants: RestaurantSummary[];
 }
 
 export function useCurrentUser() {
