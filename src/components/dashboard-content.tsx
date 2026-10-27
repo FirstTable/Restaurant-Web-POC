@@ -37,10 +37,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { ActivityPanel } from "@/components/activity-panel";
 import { RestaurantSearch } from "@/components/restaurant-search";
-import { RolesPanel } from "@/components/roles-panel";
-import { TeamPanel } from "@/components/team-panel";
 import { getErrorMessage } from "@/lib/apollo-client";
 import { useAuth } from "@/lib/auth-context";
 import { useSelectedRestaurant } from "@/lib/use-selected-restaurant";
@@ -70,7 +67,7 @@ function todayString() {
   return toDateString(new Date());
 }
 
-// How far back staff can still check in / mark no-show / undo — enough to
+// How far back staff can still mark a no-show or undo one — enough to
 // tidy up last night, without rewriting old no-show history. App-side only:
 // the backend accepts state changes on any date.
 const EDIT_WINDOW_DAYS = 7;
@@ -85,7 +82,7 @@ function daysBetween(from: string, to: string) {
   return Math.round((parseDateString(to)!.getTime() - parseDateString(from)!.getTime()) / 86_400_000);
 }
 
-// The backend caps date ranges at 62 days.
+// The backend rejects ranges of 62 days or more, counting both ends.
 const MAX_RANGE_DAYS = 62;
 
 // The viewed range lives in ?from=&to= so a specific day or week is a
@@ -99,7 +96,7 @@ function useDateRange() {
   const rawTo = searchParams.get("to");
   const from = parseDateString(rawFrom) ? rawFrom! : today;
   const to =
-    parseDateString(rawTo) && rawTo! >= from && daysBetween(from, rawTo!) < MAX_RANGE_DAYS
+    parseDateString(rawTo) && rawTo! >= from && daysBetween(from, rawTo!) + 1 < MAX_RANGE_DAYS
       ? rawTo!
       : from;
 
@@ -163,7 +160,6 @@ const RESERVATIONS_QUERY = gql`
   query Reservations($restaurantId: Int!, $from: String!, $to: String) {
     reservations(restaurantId: $restaurantId, from: $from, to: $to) {
       id
-      type
       guestName
       date
       time
@@ -225,12 +221,10 @@ const ADD_TABLES_MUTATION = gql`
   }
 `;
 
-type ReservationState = "BOOKED" | "CHECKED_IN" | "NOT_APPEARED" | "CANCELLED";
-type BookingType = "FIRST_TABLE" | "REGULAR_TABLE" | "WALK_IN";
+type ReservationState = "BOOKED" | "NOT_APPEARED" | "CANCELLED";
 
 interface Reservation {
   id: number;
-  type: BookingType;
   guestName: string;
   date: string;
   time: string;
@@ -265,7 +259,6 @@ interface ScheduleDay {
 
 const stateVariant: Record<ReservationState, "default" | "secondary" | "outline"> = {
   BOOKED: "outline",
-  CHECKED_IN: "default",
   NOT_APPEARED: "secondary",
   CANCELLED: "secondary",
 };
@@ -310,6 +303,8 @@ function AddAvailabilityDialog({ restaurantId, onDone }: { restaurantId: number;
             date,
             session,
             times: times.split(",").map((t) => t.trim()),
+            // Pax limits and party sizes need the "Limit availability by
+            // pax" permission (403 otherwise), so this form only offers tables.
             limitBy: "TABLES",
             tables: Number(tables),
           },
@@ -380,32 +375,20 @@ function DashboardContentInner() {
   const range = useDateRange();
   const editableFrom = addDays(range.today, -EDIT_WINDOW_DAYS);
   const { token } = useAuth();
-  const { user, loading: userLoading, restaurantId, access, can, lookupLoading, lookupError } =
+  const { user, loading: userLoading, restaurantId, restaurant, lookupLoading, lookupError } =
     useSelectedRestaurant();
   // restaurantId comes from the URL, so it stays set across logout. clearStore()
   // wipes cached results without refetching queries that are still subscribed,
   // and these two would keep that empty result until the week or URL changed.
   const skip = !restaurantId || !token;
 
-  // Tabs the user's permissions at this restaurant allow, in display order.
-  const tabs = [
-    can("VIEW_RESERVATIONS") && { value: "reservations", label: "Reservations" },
-    can("VIEW_SCHEDULE") && { value: "schedule", label: "Schedule" },
-    can("MANAGE_TEAM") && { value: "team", label: "Team" },
-    can("MANAGE_ROLES") && { value: "roles", label: "Roles" },
-    can("MANAGE_TEAM") && { value: "activity", label: "Activity" },
-  ].filter((t) => !!t);
-  const [selectedTab, setSelectedTab] = useState("reservations");
-  // Falls back to the first allowed tab when permissions change under us.
-  const tab = tabs.some((t) => t.value === selectedTab) ? selectedTab : tabs[0]?.value;
-
   const reservationsQuery = useQuery<{ reservations: Reservation[] }>(RESERVATIONS_QUERY, {
     variables: { restaurantId, from: range.from, to: range.to },
-    skip: skip || !can("VIEW_RESERVATIONS"),
+    skip,
   });
   const scheduleQuery = useQuery<{ schedule: ScheduleDay[] }>(SCHEDULE_QUERY, {
     variables: { restaurantId, from: range.from, to: range.to },
-    skip: skip || !can("VIEW_SCHEDULE"),
+    skip,
     // Without this, .loading stays false during refetch() and the "Loading…"
     // state never shows after adding tables/availability.
     notifyOnNetworkStatusChange: true,
@@ -414,19 +397,20 @@ function DashboardContentInner() {
   const [changeState, { loading: changeStateLoading }] = useMutation(CHANGE_STATE_MUTATION);
   const [addTables, { loading: addTablesLoading }] = useMutation(ADD_TABLES_MUTATION);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [pendingReservation, setPendingReservation] = useState<{ id: number; state: string } | null>(null);
+  const [pendingReservationId, setPendingReservationId] = useState<number | null>(null);
   const [pendingSlotId, setPendingSlotId] = useState<number | null>(null);
 
-  async function handleChangeState(reservationId: number, state: string) {
+  // NOT_APPEARED marks a no-show; BOOKED undoes it.
+  async function handleChangeState(reservationId: number, state: "BOOKED" | "NOT_APPEARED") {
     if (changeStateLoading) return; // already mid-flight — ignore a repeat click
     setActionError(null);
-    setPendingReservation({ id: reservationId, state });
+    setPendingReservationId(reservationId);
     try {
       await changeState({ variables: { restaurantId, reservationId, state } });
     } catch (err) {
       setActionError(getErrorMessage(err));
     } finally {
-      setPendingReservation(null);
+      setPendingReservationId(null);
     }
   }
 
@@ -458,7 +442,7 @@ function DashboardContentInner() {
     );
   }
 
-  if (user?.isInternalAdmin && (restaurantId == null || !access)) {
+  if (user?.isInternalAdmin && (restaurantId == null || !restaurant)) {
     return (
       <main className="mx-auto max-w-4xl w-full p-8">
         <Card className="overflow-visible">
@@ -480,7 +464,7 @@ function DashboardContentInner() {
     );
   }
 
-  if (user && !user.isInternalAdmin && user.access.length === 0) {
+  if (user && !user.isInternalAdmin && user.restaurants.length === 0) {
     return (
       <main className="mx-auto max-w-4xl w-full p-8">
         <Card>
@@ -495,7 +479,7 @@ function DashboardContentInner() {
     );
   }
 
-  if (user && !user.isInternalAdmin && !access) {
+  if (user && !user.isInternalAdmin && !restaurant) {
     return (
       <main className="mx-auto max-w-4xl w-full p-8">
         <Card>
@@ -513,24 +497,17 @@ function DashboardContentInner() {
     <main className="mx-auto max-w-4xl w-full p-8">
       <Card>
         <CardHeader>
-          <CardTitle>{access?.restaurant.title ?? "Restaurant Dashboard"}</CardTitle>
+          <CardTitle>{restaurant?.title ?? "Restaurant Dashboard"}</CardTitle>
         </CardHeader>
         <CardContent>
           {actionError && <p className="text-destructive text-sm mb-3">{actionError}</p>}
 
-          {tabs.length === 0 && (
-            <p className="text-muted-foreground text-sm">
-              Your role here ({access?.role}) doesn&apos;t include any features yet.
-            </p>
-          )}
+          <RangeNav {...range} />
 
-          {(tab === "reservations" || tab === "schedule") && <RangeNav {...range} />}
-
-          <Tabs value={tab} onValueChange={setSelectedTab}>
+          <Tabs defaultValue="reservations">
             <TabsList>
-              {tabs.map((t) => (
-                <TabsTrigger key={t.value} value={t.value}>{t.label}</TabsTrigger>
-              ))}
+              <TabsTrigger value="reservations">Reservations</TabsTrigger>
+              <TabsTrigger value="schedule">Schedule</TabsTrigger>
             </TabsList>
 
             <TabsContent value="reservations">
@@ -555,13 +532,12 @@ function DashboardContentInner() {
                   </TableHeader>
                   <TableBody>
                     {reservationsQuery.data.reservations.map((r) => {
-                      const isPending = pendingReservation?.id === r.id;
+                      const isPending = pendingReservationId === r.id;
                       const editable = r.date >= editableFrom;
                       return (
                         <TableRow key={r.id}>
                           <TableCell>
                             {r.guestName}
-                            {r.type === "WALK_IN" && <Badge variant="outline" className="ml-2">Dine Now</Badge>}
                             {r.firstVisit && <span className="text-muted-foreground text-xs"> (first visit)</span>}
                           </TableCell>
                           <TableCell>{r.partySize}</TableCell>
@@ -571,7 +547,7 @@ function DashboardContentInner() {
                             <Badge variant={stateVariant[r.state]}>{r.state}</Badge>
                           </TableCell>
                           <TableCell className="flex gap-2 justify-end">
-                            {r.state === "CANCELLED" || !can("CHANGE_RESERVATION_STATE") ? null : !editable ? (
+                            {r.state === "CANCELLED" ? null : !editable ? (
                               <span
                                 className="text-muted-foreground text-xs"
                                 title={`Reservations older than ${EDIT_WINDOW_DAYS} days can't be changed`}
@@ -579,14 +555,9 @@ function DashboardContentInner() {
                                 Read-only
                               </span>
                             ) : r.state === "BOOKED" ? (
-                              <>
-                                <Button size="sm" variant="outline" disabled={isPending} onClick={() => handleChangeState(r.id, "CHECKED_IN")}>
-                                  {isPending && pendingReservation?.state === "CHECKED_IN" ? "Checking in…" : "Check in"}
-                                </Button>
-                                <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChangeState(r.id, "NOT_APPEARED")}>
-                                  {isPending && pendingReservation?.state === "NOT_APPEARED" ? "Marking…" : "No-show"}
-                                </Button>
-                              </>
+                              <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChangeState(r.id, "NOT_APPEARED")}>
+                                {isPending ? "Marking…" : "No-show"}
+                              </Button>
                             ) : (
                               <Button size="sm" variant="ghost" disabled={isPending} onClick={() => handleChangeState(r.id, "BOOKED")}>
                                 {isPending ? "Undoing…" : "Undo"}
@@ -602,7 +573,7 @@ function DashboardContentInner() {
             </TabsContent>
 
             <TabsContent value="schedule">
-              {can("ADD_AVAILABILITY") && restaurantId && (
+              {restaurantId && (
                 <div className="mb-3 flex justify-end">
                   <AddAvailabilityDialog restaurantId={restaurantId} onDone={() => scheduleQuery.refetch()} />
                 </div>
@@ -641,7 +612,7 @@ function DashboardContentInner() {
                                 </TableCell>
                                 <TableCell>{slot.partySizes ?? "—"}</TableCell>
                                 <TableCell className="text-right">
-                                  {can("ADD_TABLES") && day.date >= range.today && (
+                                  {day.date >= range.today && (
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -663,14 +634,6 @@ function DashboardContentInner() {
                 </div>
               )}
             </TabsContent>
-
-            {restaurantId && (
-              <>
-                <TabsContent value="team"><TeamPanel restaurantId={restaurantId} /></TabsContent>
-                <TabsContent value="roles"><RolesPanel restaurantId={restaurantId} /></TabsContent>
-                <TabsContent value="activity"><ActivityPanel restaurantId={restaurantId} /></TabsContent>
-              </>
-            )}
           </Tabs>
         </CardContent>
       </Card>
